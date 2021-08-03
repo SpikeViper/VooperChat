@@ -34,10 +34,21 @@ namespace Valour.Server.Workers
         private static BlockingCollection<PlanetMessage> MessageQueue =
             new BlockingCollection<PlanetMessage>(new ConcurrentQueue<PlanetMessage>());
 
-        private static ConcurrentBag<PlanetMessage> StagedMessages =
-            new ConcurrentBag<PlanetMessage>();
+        private static ConcurrentDictionary<ulong, PlanetMessage> StagedMessages = new ConcurrentDictionary<ulong, PlanetMessage>();
 
         private static ValourDB Context;
+
+
+        public static void RemoveFromStaged(PlanetMessage message)
+        {
+            PlanetMessage m;
+            StagedMessages.TryRemove(message.Id, out m);
+        }
+
+        public static PlanetMessage TryGetMessage(ulong id)
+        {
+            return StagedMessages.Values.FirstOrDefault(x => x.Id == id);
+        }
 
         public static void AddToQueue(PlanetMessage message)
         {
@@ -46,7 +57,7 @@ namespace Valour.Server.Workers
 
         public static List<PlanetMessage> GetStagedMessages(ulong channel_id, int max)
         {
-            return StagedMessages.Where(x => x.Channel_Id == channel_id).TakeLast(max).Reverse().ToList();
+            return StagedMessages.Values.Where(x => x.Channel_Id == channel_id).TakeLast(max).Reverse().ToList();
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -75,12 +86,14 @@ namespace Valour.Server.Workers
                         Message.Message_Index = index;
                         Message.TimeSent = DateTime.UtcNow;
 
+                        Message.Id = IdManager.Generate();
+
                         string json = JsonConvert.SerializeObject(Message);
 
                         // This is not awaited on purpose
                         PlanetHub.Current.Clients.Group($"c-{channel_id}").SendAsync("Relay", json);
 
-                        StagedMessages.Add(Message);
+                        StagedMessages.TryAdd(Message.Id, Message);
                     }
 
 
@@ -100,7 +113,7 @@ namespace Valour.Server.Workers
 
                     if (Context != null)
                     {
-                        await Context.PlanetMessages.AddRangeAsync(StagedMessages);
+                        await Context.PlanetMessages.AddRangeAsync(StagedMessages.Values);
                         StagedMessages.Clear();
                         await Context.SaveChangesAsync();
                         _logger.LogInformation($"Saved successfully.");

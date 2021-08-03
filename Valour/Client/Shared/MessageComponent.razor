@@ -1,8 +1,9 @@
 ﻿@inject ClientPlanetManager planetManager
 @inject MemberContextMenu memberContextMenu
 @implements IDisposable
+@inject MessageContextMenu messageContextMenu
 
-<div id="m-@Message.Channel_Id-@Message.Message_Index" class="@Class">
+<div id="m-@Message.Channel_Id-@Message.Message_Index" class="@Class" @onmouseup="opencontextmenu">
     <div style="display:inline-block; position: absolute">
         <img class="author-pfp" src="@pfpurl" @onerror="OnPfpError" />
         <div class="time-container">
@@ -82,6 +83,14 @@
         if (e.Button == 2)
         {
             await memberContextMenu.Open(e, Author);
+        }
+    }
+
+    public async Task opencontextmenu(MouseEventArgs e)
+    {
+        if (e.Button == 2)
+        {
+            await messageContextMenu.Open(e, Message);
         }
     }
 

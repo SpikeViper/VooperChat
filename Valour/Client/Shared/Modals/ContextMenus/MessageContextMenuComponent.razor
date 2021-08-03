@@ -1,0 +1,241 @@
+﻿@inject MessageContextMenu messageContextMenu
+@inject BanModal banModal
+@inject ConfirmModal confirmModal
+@implements IDisposable
+
+@if (visible)
+{
+    <style>
+        /* The container - needed to position the dropdown content */
+        .role-dropdown {
+            position: relative;
+        }
+
+        /* Dropdown Content (Hidden by Default) */
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+            top: -150px;
+            left: 150px;
+            height: 200px;
+            padding-top: 10px;
+            padding-bottom: 10px;
+            background-color: var(--main-1);
+            overflow-y: auto;
+        }
+
+        /* Links inside the dropdown */
+        .dropdown-content a {
+            color: black;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+        }
+
+        /* Change color of dropdown links on hover */
+        .dropdown-content a:hover {
+            background-color: #f1f1f1
+        }
+
+        /* Show the dropdown menu on hover */
+        .role-dropdown:hover .dropdown-content {
+            display: block;
+        }
+
+        .dropdown-content::hover {
+            display: block;
+        }
+
+        /* Change the background color of the dropdown button when the dropdown content is shown */
+        .role-dropdown:hover .dropbtn {
+            background-color: #192630;
+        }
+
+        .user-context-delete {
+            color: #EF3A3A;
+        }
+
+        .role-checkbox {
+            margin-right: 5px;
+        }
+
+        .user-context-delete:hover {
+            color: white;
+            background: #EF3A3A;
+        }
+    </style>
+
+    <div class="context-menu message-context-menu" id="@Modal_Id" style="left:@(x)px;top:@(y)px">
+        @if (CanDelete)
+        {
+            <div class="context-menu-item message-context-delete" id="ban-button" @onclick="OnClickDelete" style="border-radius: 6px;">
+                <p class="context-menu-item-text" id="ban-button-inner" style="color:white;">
+                    Delete
+                </p>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    public PlanetRole MainRole { get; set; }
+    public ClientPlanetMember ClientMember { get; set; }
+    public ClientPlanetMessage seletedMessage { get; set; }
+
+    [Parameter]
+    public ModalHolderComponent Holder { get; set; }
+
+    public bool visible = false;
+
+    const string Modal_Id = "message-context-menu";
+
+    public double x;
+    public double y;
+
+    public bool CanDelete = false;
+
+    public async Task<bool> UpdateCanDelete()
+    {
+        // check if we sent the message
+        // this should work, unless spike changes author_id again
+        if (ClientMember.Id == seletedMessage.Author_Id) {
+            return true;
+        }
+
+        // get planet, just in case we need someone to put a flag after the moon
+
+        ClientPlanet planet = await ClientPlanetManager.Current.GetPlanetAsync(seletedMessage.Planet_Id);
+
+        // if we are the owner of the planet, then skip checking perm
+
+        if (planet.Owner_Id == ClientMember.User_Id) {
+            return true;
+        }
+
+        // if we have admin perm on planet, return true
+
+        if (MainRole.HasPermission(PlanetPermissions.FullControl) || MainRole.HasPermission(PlanetPermissions.ManageChannels))
+        {
+            return true;
+        }
+
+        // JACOB OR SPIKE
+        // MAKE SURE YOU ADD A MANAGE MESSAGE PERM FOR CHANNELS/CATEGORIES
+        // AND MAKE THIS USE THAT PERM INSTEAD OF MANAGE CHANNEL/CATEGORY
+
+        // lamaba magic
+        ClientPlanetChatChannel channel = (await planet.GetChannelsAsync()).First(x => x.Id == seletedMessage.Channel_Id);
+
+        // for some reason, you need to do this magic to check perm
+
+        ChatChannelPermissionsNode node = (ChatChannelPermissionsNode)await channel.GetPermissionsNode(MainRole);
+
+        if (node == null) {
+            return false;
+        }
+
+        if (node.GetPermissionState(ChatChannelPermissions.ManageChannel) == PermissionState.True)
+        {
+            return true;
+        }
+
+        if (node.GetPermissionState(ChatChannelPermissions.FullControl) == PermissionState.True)
+        {
+            return true;
+        }
+
+        // more lamaba magic
+
+        ClientPlanetCategory category = (await planet.GetCategoriesAsync()).First(x => x.Id == channel.Parent_Id);
+
+        // for some reason, you need to do this magic to check perm
+
+        CategoryPermissionsNode categorynode = (CategoryPermissionsNode)await category.GetPermissionsNode(MainRole);
+
+        if (categorynode == null) {
+            return false;
+        }
+
+        if (categorynode.GetPermissionState(CategoryPermissions.ManageCategory) == PermissionState.True)
+        {
+            return true;
+        }
+
+        if (categorynode.GetPermissionState(CategoryPermissions.FullControl) == PermissionState.True)
+        {
+            return true;
+        }
+
+        // if all else fails, return false
+
+        return false;
+    }
+
+    public async Task OnMemberUpdate(ClientPlanetMember member)
+    {
+        if (member.Id == ClientMember.Id)
+        {
+            ClientMember = member;
+            MainRole = await ClientMember.GetPrimaryRoleAsync();
+            StateHasChanged();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        messageContextMenu.Component = this;
+
+        ClientPlanetManager.Current.OnMemberUpdate += OnMemberUpdate;
+        messageContextMenu.OpenEvent += OnOpened;
+        ModalHolderComponent.CloseModalEvent += OnModalClose;
+    }
+
+    public async Task OnOpened()
+    {
+        seletedMessage = messageContextMenu.SelectedMessage;
+        ClientMember = await ClientPlanetManager.Current.GetPlanetMemberAsync(ClientUserManager.User.Id, seletedMessage.Planet_Id);
+        MainRole = await ClientMember.GetPrimaryRoleAsync();
+        CanDelete = await UpdateCanDelete();
+        StateHasChanged();
+    }
+
+    public async Task OnClickDelete()
+    {
+        await OnModalClose("message-context-menu");
+
+        var result = await ClientUserManager.Http.GetAsync($"/Channel/DeleteMessage?token={ClientUserManager.UserSecretToken}" +
+                                                                                $"&id={seletedMessage.Id}");
+
+        Console.WriteLine(await result.Content.ReadAsStringAsync());
+    }
+
+    public void SetPosition(double x, double y)
+    {
+        this.x = x;
+        this.y = y;
+    }
+
+    public void SetVisibility(bool value)
+    {
+        this.visible = value;
+        StateHasChanged();
+    }
+
+    public async Task OnModalClose(string modal_id)
+    {
+        if (Modal_Id == modal_id)
+        {
+            SetVisibility(false);
+        }
+    }
+
+    // Clean up properly
+    void IDisposable.Dispose()
+    {
+        messageContextMenu.OpenEvent -= OnOpened;
+    }
+}
+

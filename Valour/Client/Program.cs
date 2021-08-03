@@ -39,6 +39,7 @@ namespace Valour.Client
             builder.Services.AddSingleton<ChannelListManager>();
 
             // Context menus and modals
+            builder.Services.AddSingleton<MessageContextMenu>();
             builder.Services.AddSingleton<MemberContextMenu>();
             builder.Services.AddSingleton<ChannelListContextMenu>();
             builder.Services.AddSingleton<AddChannelContextMenu>();

@@ -16,6 +16,8 @@ using Valour.Server.Oauth;
 using Valour.Server.Categories;
 using WebPush;
 using Valour.Server.MPS;
+using Microsoft.AspNetCore.SignalR;
+using Newtonsoft.Json;
 
 /*  Valour - A free and secure chat client
  *  Copyright (C) 2021 Vooper Media LLC
@@ -337,8 +339,86 @@ namespace Valour.Server.Controllers
 
             return messages;
         }
+        public async Task<TaskResult> DeleteMessage(ulong id, string token)
+        {
 
-        [HttpPost]
+            AuthToken authToken = await ServerAuthToken.TryAuthorize(token, Context);
+
+            if (authToken == null)
+            {
+                return new TaskResult(false, "Failed to authorize user.");
+            }
+
+            // first check if message is in message worker
+
+            bool FromStageMessages = true;
+
+            PlanetMessage msg = PlanetMessageWorker.TryGetMessage(id);
+
+            if (msg == null)
+            {
+                msg = await Context.PlanetMessages.FirstOrDefaultAsync(x => x.Id == id);
+                FromStageMessages = false;
+            }
+
+            // if we still can't find message, return error
+
+            if (msg == null)
+            {
+                return new TaskResult(false, "Failed to delete message: could not find message!");
+            }
+
+            ServerPlanetChatChannel channel = await Context.PlanetChatChannels.FirstOrDefaultAsync(x => x.Id == msg.Channel_Id);
+
+            if (channel == null)
+            {
+                return new TaskResult(false, "Failed to delete message: Could not find channel!");
+            }
+
+            ServerPlanetMember member = await Context.PlanetMembers.FirstOrDefaultAsync(x => x.User_Id == authToken.User_Id && x.Planet_Id == channel.Planet_Id);
+
+            if (member == null)
+            {
+                return new TaskResult(false, "Failed to delete message: You are not in the planet!");
+            }
+
+            // check permission to see if the user can delete a message
+
+            // only check permission if the author is not the same
+            if (!(msg.Author_Id == member.Id))
+            {
+                if (!(await channel.HasPermission(member, ChatChannelPermissions.ManageChannel, Context)))
+                {
+                    return new TaskResult(false, "Failed to delete message: You don't have permission to delete!");
+                }
+
+                if (!(await channel.HasPermission(member, ChatChannelPermissions.FullControl, Context)))
+                {
+                    return new TaskResult(false, "Failed to delete message: You don't have permission to delete!");
+                }
+            }
+
+            if (FromStageMessages)
+            {
+                PlanetMessageWorker.RemoveFromStaged(msg);
+            }
+
+            else
+            {
+                Context.PlanetMessages.Remove(msg);
+            }
+
+            string json = JsonConvert.SerializeObject(msg);
+
+            // This is not awaited on purpose
+            PlanetHub.Current.Clients.Group($"c-{msg.Channel_Id}").SendAsync("MessageDeletion", json);
+
+            await Context.SaveChangesAsync();
+
+            return new TaskResult(true, "Deleted Message");
+        }
+
+            [HttpPost]
         public async Task<TaskResult> PostMessage(PlanetMessage msg, string token)
         {
 

@@ -112,6 +112,19 @@
     {
         RenderedMessages = new List<MessageComponent>();
         Messages = new List<ClientPlanetMessage>();
+        ClientPlanetManager.Current.OnMessageDeletion += OnMessageDeletion;
+        StateHasChanged();
+    }
+
+    public async Task OnMessageDeletion(ClientPlanetMessage msg)
+    {
+        ClientPlanetMessage old = Messages.FirstOrDefault(x => x.Id == msg.Id);
+        if (Messages.Contains(old))
+        {
+            Messages.Remove(old);
+        }
+        // force refersh
+        state = "no";
         StateHasChanged();
     }
 

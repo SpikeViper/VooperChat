@@ -52,6 +52,8 @@ namespace Valour.Client.Planets
 
         public event Func<ClientPlanet, Task> OnPlanetOpen;
 
+        public event Func<ClientPlanetMessage, Task> OnMessageDeletion;
+
         public event Func<Task> OnChannelsUpdate;
 
         public event Func<Task> OnChannelWindowUpdate;
@@ -83,6 +85,7 @@ namespace Valour.Client.Planets
             signalRManager.hubConnection.On<string>("CategoryUpdate", UpdateCategory);
             signalRManager.hubConnection.On<string>("ChatChannelDeletion", ChatChannelDeletion);
             signalRManager.hubConnection.On<string>("CategoryDeletion", CategoryDeletion);
+            signalrmanager.hubConnection.On<string>("MessageDeletion", MessageDeletion);
         }
 
         public bool IsChatChannelOpen(ClientPlanetChatChannel channel)
@@ -647,6 +650,25 @@ namespace Valour.Client.Planets
             foreach (ChatChannelWindow window in OpenPlanetChatWindows.Where(x => x.Channel.Id == message.Channel_Id))
             {
                 await window.Component.OnRecieveMessage(message);
+            }
+        }
+
+        public async Task MessageDeletion(string json)
+        {
+            ClientPlanetMessage msg = JsonConvert.DeserializeObject<ClientPlanetMessage>(json);
+
+            if (msg == null)
+            {
+                Console.WriteLine("Failed to deserialize message in message deleton.");
+                return;
+            }
+
+            Console.WriteLine($"RECIEVE: Planet message deletion ping for message {msg.Id}");
+            Console.WriteLine(json);
+
+            if (OnMessageDeletion != null)
+            {
+                await OnMessageDeletion.Invoke(msg);
             }
         }
 

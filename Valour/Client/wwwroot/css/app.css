@@ -1882,3 +1882,7 @@ blockquote {
 .mention:active {
     background-color: rgba(255, 255, 255, 0.3);
 }
+
+.message-context-delete:hover {
+    background-color: #EF3A3A;
+}

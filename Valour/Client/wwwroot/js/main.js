@@ -361,6 +361,10 @@ window.onpointerdown = function (event) {
         DotNet.invokeMethodAsync('Valour.Client', 'CloseModalInterop', "edit-user-modal");
     }
 
+    if (!isDescendant(event.target, "message-context-menu")) {
+        DotNet.invokeMethodAsync('Valour.Client', 'CloseModalInterop', "message-context-menu");
+    }
+
     if (!isDescendant(event.target, "member-context-menu")) {
         DotNet.invokeMethodAsync('Valour.Client', 'CloseModalInterop', "member-context-menu");
     }
