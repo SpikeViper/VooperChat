@@ -355,7 +355,10 @@ public class ChannelApi
     {
         var token = await tokenService.GetCurrentTokenAsync();
         var message = await channelService.GetMessageNoReplyAsync(messageId);
-        
+
+        if (message is null)
+            return ValourResult.NotFound<Message>();
+
         if (message.ChannelId != channelId)
             return ValourResult.BadRequest("Channel id in message does not match channel id in route");
 

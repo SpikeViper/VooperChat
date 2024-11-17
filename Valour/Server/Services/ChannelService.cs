@@ -548,8 +548,27 @@ public class ChannelService
     /// <summary>
     /// Returns the message with the given id (no reply!)
     /// </summary>
-    public async Task<Message> GetMessageNoReplyAsync(long id) =>
-        (await _db.Messages.FindAsync(id)).ToModel();
+    public async Task<Message> GetMessageNoReplyAsync(long id)
+    {
+     
+         var queMessageEntity = PlanetMessageWorker.GetStagedMessage(id);
+         if (queMessageEntity != null)
+         {
+             return queMessageEntity;
+         }
+         //Add queue check here.
+
+
+         var dbMessageEntity = await _db.Messages.FindAsync(id);
+         if (dbMessageEntity != null)
+         {
+            return dbMessageEntity.ToModel();
+         }
+
+        throw new Exception($"Message with ID {id} not found.");
+        return null;
+      
+    }
 
     /// <summary>
     /// Used to post a message 
