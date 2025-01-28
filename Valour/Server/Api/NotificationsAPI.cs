@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Valour.Sdk.Models;
 using Valour.Server.Database;
 
@@ -9,26 +9,27 @@ public class NotificationsAPI : BaseAPI
     /// <summary>
     /// Adds the routes for this API section
     /// </summary>
-    public new static void AddRoutes(WebApplication app)
+    public static void AddRoutes(WebApplication app)
     {
-        app.MapPost("api/notification/subscribe", Subscribe);
-        app.MapPost("api/notification/unsubscribe", Unsubscribe);
+        app.MapPost("api/notification/subscribe", SubscribeAsync);
+        app.MapPost("api/notification/unsubscribe", UnsubscribeAsync);
     }
 
-    public static async Task<IResult> Subscribe(ValourDb db, [FromBody] NotificationSubscription subscription, UserService userService, [FromHeader] string authorization)
+    public static async Task<IResult> SubscribeAsync(ValourDb db, [FromBody] NotificationSubscription subscription, UserService userService, [FromHeader] string authorization)
     {
         if (string.IsNullOrWhiteSpace(authorization))
             return ValourResult.NoToken();
 
-        var userId = await userService.GetCurrentUserIdAsync();
+        var userId = await userService.GetCurrentUser IdAsync();
 
-        if (userId is long.MinValue)
+        // Check for a valid user ID
+        if (userId <= 0)
             return ValourResult.InvalidToken();
 
-        // Force subscription to use auth token's user id
+        // Force subscription to use auth token's user ID
         subscription.UserId = userId;
 
-        // Ensure subscription data is there
+        // Ensure subscription data is complete
         if (string.IsNullOrWhiteSpace(subscription.Endpoint)
             || string.IsNullOrWhiteSpace(subscription.Auth)
             || string.IsNullOrWhiteSpace(subscription.Key))
@@ -36,50 +37,51 @@ public class NotificationsAPI : BaseAPI
             return ValourResult.BadRequest("Subscription data is incomplete.");
         }
 
-        // Look for old subscription
-        var old = await db.NotificationSubscriptions.FirstOrDefaultAsync(x => x.Endpoint == subscription.Endpoint);
+        // Look for an existing subscription
+        var oldSubscription = await db.NotificationSubscriptions.FirstOrDefaultAsync(x => x.Endpoint == subscription.Endpoint);
 
-        if (old != null)
+        if (oldSubscription != null)
         {
-            if (old.Auth == subscription.Auth && old.Key == subscription.Key)
+            if (oldSubscription.Auth == subscription.Auth && oldSubscription.Key == subscription.Key)
                 return Results.Ok("There is already a subscription for this endpoint.");
 
-            // Update old subscription
-            old.Auth = subscription.Auth;
-            old.Key = subscription.Key;
+            // Update the old subscription
+            oldSubscription.Auth = subscription.Auth;
+            oldSubscription.Key = subscription.Key;
 
-            db.NotificationSubscriptions.Update(old);
+            db.NotificationSubscriptions.Update(oldSubscription);
             await db.SaveChangesAsync();
 
             return Results.Ok("Updated subscription.");
         }
 
+        // Generate a new ID for the subscription
         subscription.Id = IdManager.Generate();
 
         await db.NotificationSubscriptions.AddAsync(subscription.ToDatabase());
         await db.SaveChangesAsync();
 
-        return Results.Ok("Subscription was accepted.");
+        return Results.Created($"api/notification/subscribe/{subscription.Id}", "Subscription was accepted.");
     }
 
-    public static async Task<IResult> Unsubscribe(ValourDb db, [FromBody] NotificationSubscription subscription, UserService userService, [FromHeader] string authorization)
+    public static async Task<IResult> UnsubscribeAsync(ValourDb db, [FromBody] NotificationSubscription subscription, UserService userService, [FromHeader] string authorization)
     {
         if (string.IsNullOrWhiteSpace(authorization))
             return ValourResult.NoToken();
 
-        var userId = await userService.GetCurrentUserIdAsync();
+        var userId = await userService.GetCurrentUser IdAsync();
 
-        if (userId is long.MinValue)
+        // Check for a valid user ID
+        if (userId <= 0)
             return ValourResult.InvalidToken();
 
-        // Look for old subscription
-        var old = await db.NotificationSubscriptions.FirstOrDefaultAsync(x => x.Endpoint == subscription.Endpoint);
+        // Look for an existing subscription
+        var oldSubscription = await db.NotificationSubscriptions.FirstOrDefaultAsync(x => x.Endpoint == subscription.Endpoint);
 
-        if (old is null)
+        if (oldSubscription is null)
             return Results.Ok("Subscription already removed.");
 
-
-        db.NotificationSubscriptions.Remove(old);
+        db.NotificationSubscriptions.Remove(oldSubscription);
         await db.SaveChangesAsync();
 
         return Results.Ok("Removed subscription.");
