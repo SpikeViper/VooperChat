@@ -11,29 +11,29 @@ jobs:
   build:
     runs-on: self-hosted
 
-    #services:
-    #  postgres:
-    #    image: postgres:latest
-    #    ports:
-    #      - 5432:5432
-    #    env:
-    #      POSTGRES_USER: test_user 
-    #      POSTGRES_PASSWORD: test_password_123
-    #      POSTGRES_DB: valour_test
-    #    options: >-
-    #      --health-cmd="pg_isready -U test_user"
-    #      --health-interval=10s
-    #      --health-timeout=5s
-    #      --health-retries=5
-      #redis:
-      #  image: redis:latest
-      #  ports:
-      #    - 6379:6379
-      #  options: >-
-      #    --health-cmd="redis-cli ping || exit 1"
-      #    --health-interval=10s
-      #    --health-timeout=5s
-      #    --health-retries=5
+    # services:
+    #   postgres:
+    #     image: postgres:latest
+    #     ports:
+    #       - 5432:5432
+    #     env:
+    #       POSTGRES_USER: test_user 
+    #       POSTGRES_PASSWORD: test_password_123
+    #       POSTGRES_DB: valour_test
+    #     options: >-
+    #       --health-cmd="pg_isready -U test_user"
+    #       --health-interval=10s
+    #       --health-timeout=5s
+    #       --health-retries=5
+    # redis:
+    #   image: redis:latest
+    #   ports:
+    #     - 6379:6379
+    #   options: >-
+    #     --health-cmd="redis-cli ping || exit 1"
+    #     --health-interval=10s
+    #     --health-timeout=5s
+    #     --health-retries=5
     
     steps:
     - uses: actions/checkout@v3
@@ -113,9 +113,6 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore
 
-    - name: Clean
-      run: dotnet clean
-
     - name: Build
       run: dotnet build --no-restore
 
@@ -129,7 +126,7 @@ jobs:
         NODE_NAME: "emma"
         APPLY_MIGRATIONS: true
       run: dotnet test --no-build --verbosity normal
-      #continue-on-error: true
+      # continue-on-error: true
 
     - name: Publish Test Results
       if: always()
